@@ -6,8 +6,10 @@ ui <- fluidPage(
    
   fileInput("file1", "Choisissez un fichier"),
 
- #Must be set within the UI
-tableOutput(outputId = "mytable"),
+  
+  actionButton(inputId = "go" , label ="charger"),
+
+  tableOutput(outputId = "mytable"),
 
   verbatimTextOutput(outputId = "metadata")    
 )
