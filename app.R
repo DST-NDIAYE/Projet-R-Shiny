@@ -18,7 +18,9 @@ ui <- fluidPage(
 server <- function(input, output) {
    
 
-  data <- reactive( {
+
+
+  data <- eventReactive( input$go ,  {
 
     file = input$file1  
      if (is.null(file)) return("Aucun fichier téléchargé")
