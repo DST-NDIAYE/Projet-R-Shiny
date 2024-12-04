@@ -9,10 +9,7 @@ ui <- fluidPage(
  #Must be set within the UI
 tableOutput(outputId = "mytable"),
 
-
-
-  verbatimTextOutput(outputId = "metadata") 
-   
+  verbatimTextOutput(outputId = "metadata")    
 )
 
 # Define server logic required to draw a histogram
