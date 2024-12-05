@@ -3,6 +3,18 @@
 library(shiny)
 
 ui <- fluidPage(
+
+
+
+  fluidRow(
+    column(3),
+    column(4 , actionButton(inputId = "go" , label ="charger"))
+
+  ),
+
+
+
+
    
   fileInput("file1", "Choisissez un fichier"),
 
