@@ -30,6 +30,24 @@ ui <- fluidPage(
     column(4, plotOutput(outputId = "effecumul")) ,
     column(4, plotOutput(outputId = "boiteAmoustache"))
 
+  ),
+
+  fluidRow(
+    column(4, 
+           # Zone d'affichage de l'histogramme
+           plotOutput(outputId = "effectifsHist")),
+    column(4, 
+           # Zone d'affichage de l'histogramme
+           plotOutput(outputId = "effectifsHistFreqDens"))
+  ),
+  
+  fluidRow(
+    column(4, 
+           # Zone d'affichage de la courbe cumulative
+           plotOutput(outputId = "effectifsCumCurve")),
+    column(4, 
+           # Zone d'affichage de la courbe cumulative
+           plotOutput(outputId = "freqCumCurve"))
   )
 
 
