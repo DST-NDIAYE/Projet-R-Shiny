@@ -7,23 +7,22 @@ ui <- fluidPage(
 
 
   fluidRow(
-    column(3),
-    column(4 , actionButton(inputId = "go" , label ="charger"))
+    column(3 ,fileInput("file1", "Choisissez un fichier")),
+
+    column(9 ,verbatimTextOutput(outputId = "metadata") )
 
   ),
 
+  fluidRow(
 
+    column(2 , actionButton(inputId = "go" , label ="charger") ),
+    column(8 , tableOutput(outputId = "mytable"))
 
-
-   
-  fileInput("file1", "Choisissez un fichier"),
+  )
 
   
-  actionButton(inputId = "go" , label ="charger"),
 
-  tableOutput(outputId = "mytable"),
-
-  verbatimTextOutput(outputId = "metadata")    
+      
 )
 
 # Define server logic required to draw a histogram
