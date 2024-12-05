@@ -162,7 +162,13 @@ output$centredis <- renderTable({
           breaks = seq(0.8, 3, by = 0.2), right = FALSE, cex.lab = 1.5)
   })
   
-
+  output$effectifsHistFreqDens <- renderPlot({
+    # Histogramme des densités de fréquences
+    hist( fecondite(), freq = FALSE, cex.axis = 1.5, cex.main = 1.5,
+          main = "Histogramme de l'indice de fécondite", col = "green",
+          xlab = "Indice de fécondité", ylab = "Densité de fréquences", las = 1,
+          breaks = seq(0.8, 3, by = 0.2), right = FALSE, cex.lab = 1.5)
+  })
 
 
 
