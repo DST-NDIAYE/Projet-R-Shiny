@@ -150,6 +150,24 @@ output$centredis <- renderTable({
   })
 
 
+
+
+ # Histogrammes
+  # ----
+  output$effectifsHist <- renderPlot({
+    # Histogramme des effectifs
+    hist( fecondite(), freq = TRUE, cex.axis = 1.5, cex.main = 1.5,
+          main = "Histogramme de l'indice de fécondite", col = "blue",
+          xlab = "Indice de fécondité", ylab = "Effectifs", las = 1,
+          breaks = seq(0.8, 3, by = 0.2), right = FALSE, cex.lab = 1.5)
+  })
+  
+
+
+
+
+
+
 }
 
 # Run the application 
