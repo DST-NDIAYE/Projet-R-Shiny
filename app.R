@@ -142,6 +142,14 @@ output$centredis <- renderTable({
 })
 
 
+
+ # Récupération des valeurs fecondite
+  fecondite <- reactive({
+    if(!"fecondite" %in% colnames(data())) return(NULL)
+    data()$fecondite
+  })
+
+
 }
 
 # Run the application 
