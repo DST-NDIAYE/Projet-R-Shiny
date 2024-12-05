@@ -17,11 +17,24 @@ ui <- fluidPage(
   fluidRow(
 
     column(2 , actionButton(inputId = "go" , label ="charger") ),
-    column(10 , tableOutput(outputId = "mytable"))
+    column(6 , tableOutput(outputId = "mytable")),
+    column(4 , tableOutput(outputId = "centredis"))
+
+  ),
+
+
+
+  fluidRow(
+
+    column(4,  plotOutput(outputId = "effectif")  ) , 
+    column(4, plotOutput(outputId = "effecumul")) ,
+    column(4, plotOutput(outputId = "boiteAmoustache"))
 
   )
 
-  
+
+
+
 
       
 )
@@ -33,7 +46,7 @@ server <- function(input, output) {
     file = input$file1  
     if (is.null(file)) return("Aucun fichier téléchargé")
     read.csv( file$datapath , header = TRUE )
-  })
+  })  
 
   tabStats <- reactive({
     # Calculer les effectifs et les effectifs cumulés
@@ -58,14 +71,57 @@ server <- function(input, output) {
     summary(data())
   })
 
-
  #Must be set within the server
 output$mytable <- renderTable({
   tabStats()
 
 })
 
+output$effectif <- renderPlot({ 
+    plot(table(data()), col ="green4", xlab ="âge", ylab ="Effectifs", 
+    main ="Distribution des effectifs pour l'âge")
+  })
 
+
+output$effecumul <- renderPlot({ 
+    plot(ecdf(as.numeric(as.character(tabStats()[,1]))), 
+         col ="green4", xlab ="âge", ylab ="Fréquences cumulées", 
+         main ="Fréquences cumulés pour l'âge")
+  })
+
+
+output$boiteAmoustache <- renderPlot({
+    # Boîte à moustaches
+    boxplot( data(), col = grey(0.8), 
+             main = "Age des salariés",
+             ylab = "Age", las = 1)
+    # Affichage complémentaires en Y des différents âges
+    rug(data()[,1], side = 2)
+  })
+
+
+
+tabCentreDisp <- reactive({
+    # Noms des caractéristiques
+    names.tmp <- c("Maximum", "Minimum", "Moyenne", "Médiane",
+                   "1e quartile", "3e quartile", "Variance", "Ecart-type")
+    # Calcul des caractéristiques
+    summary.tmp <- c(max(data()[,1]), min(data()[,1]), mean(data()[,1]), median(data()[,1]),
+                     quantile((data()[,1]))[2], quantile((data()[,1]))[4],
+                     var(data()[,1]), sqrt(var(data()[,1])))
+    # Ajout des nomes au vecteur de valeurs
+    summary.tmp <- cbind.data.frame(names.tmp, summary.tmp)
+    # Ajout des noms de colonnes
+    colnames(summary.tmp) <- c("Caractéristique", "Valeur")
+    
+    summary.tmp
+  })
+
+
+
+output$centredis <- renderTable({
+  tabCentreDisp()
+})
 
 
 }
