@@ -47,11 +47,14 @@ ui <- dashboardPage(
   ),
   dashboardSidebar(
     sidebarMenu(
-      menuItem("Dashboard", tabName = "home", icon = icon("home")),
-      menuItem("Prétraitement", tabName = "preprocessing", icon = icon("sliders")),
-      menuItem("Analyse exploratoire", tabName = "exploration", icon = icon("chart-bar")),
-      menuItem("Modélisation", tabName = "modeling", icon = icon("robot"))
-    )
+    menuItem("Dashboard", tabName = "home", icon = icon("home")),
+    menuItem("Prétraitement", tabName = "preprocessing", icon = icon("sliders")),
+    menuItem("Analyse exploratoire", icon = icon("chart-bar"),
+      menuSubItem("Unidimensionnel", tabName = "univariate"),
+      menuSubItem("Bidimensionnel", tabName = "bivariate")
+    ),
+    menuItem("Modélisation", tabName = "modeling", icon = icon("robot"))
+  )
   ),
   dashboardBody(
     tabItems(
@@ -99,13 +102,103 @@ ui <- dashboardPage(
       
       # Autres onglets
       tabItem(tabName = "preprocessing", h2("Prétraitement des données")),
-      tabItem(tabName = "exploration", h2("Analyse exploratoire")),
+     
+
+tabItem(
+  tabName = "univariate",
+  h2("Analyse unidimensionnelle"),
+  
+  fluidRow(
+    column(4,
+           selectInput("variable_uni", "Variable à analyser :", choices = NULL),
+           actionButton("update_uni", "Mettre à jour")
+    )
+  ),
+  
+  fluidRow(
+    box(
+      title = "Statistiques descriptives",
+      status = "primary",
+      solidHeader = TRUE,
+      width = 12,
+      tableOutput("summary_uni")
+    )
+  ),
+  
+  fluidRow(
+    box(
+      title = "Distribution de la variable",
+      status = "info",
+      solidHeader = TRUE,
+      width = 12,
+      plotOutput("dist_uni_plot")
+    )
+  )
+)
+,
+
+tabItem(
+  tabName = "bivariate",
+  h2("Analyse bidimensionnelle"),
+  
+  fluidRow(
+    column(4,
+           selectInput("variable_x", "Variable X (quantitative) :", choices = NULL),
+           selectInput("variable_y", "Variable Y :", choices = NULL),
+           actionButton("update_bi", "Mettre à jour")
+    )
+  ),
+  
+  fluidRow(
+    box(
+      title = "Nuage de points (Quantitative vs Quantitative)",
+      status = "success",
+      solidHeader = TRUE,
+      width = 6,
+      plotOutput("scatter_plot")
+    ),
+    box(
+      title = "Boxplot (Quantitative vs Qualitative)",
+      status = "warning",
+      solidHeader = TRUE,
+      width = 6,
+      plotOutput("box_plot")
+    )
+  ),
+  
+  fluidRow(
+    box(
+      title = "Corrélation et métriques",
+      status = "danger",
+      solidHeader = TRUE,
+      width = 12,
+      verbatimTextOutput("correlation_metrics")
+    )
+  )
+)
+
+
+
+     
+     ,
 
       tabItem(
   tabName = "modeling",
   h2("Modélisation supervisée"),
+
+
+
+
+
+
+
+
+
+
+
+
   
-  # Choix du modèle
+  ################################### Choix du modèle
   fluidRow(
     column(4,
            selectInput("model_choice", "Choisissez un modèle :", 
@@ -505,6 +598,119 @@ output$variable_importance_plot <- renderPlot({
       theme_minimal()
   } 
 })
+
+
+
+
+
+
+
+
+
+
+############### analyse ##################
+
+
+observe({
+  req(data())
+  numeric_vars <- names(data())[sapply(data(), is.numeric)]
+  categorical_vars <- names(data())[sapply(data(), function(x) is.factor(x) || is.character(x))]
+  
+  updateSelectInput(session, "variable_uni", choices = names(data()))
+  updateSelectInput(session, "variable_x", choices = numeric_vars)
+  updateSelectInput(session, "variable_y", choices = c(numeric_vars, categorical_vars))
+})
+
+
+
+output$summary_uni <- renderTable({
+  req(input$variable_uni)
+  
+  variable <- data()[[input$variable_uni]]
+  
+  if (is.numeric(variable)) {
+    summary_stats <- summary(variable)
+    data.frame(Statistique = names(summary_stats), Valeur = as.character(summary_stats))
+  } else {
+    summary_stats <- table(variable)
+    data.frame(Catégorie = names(summary_stats), Fréquence = as.numeric(summary_stats))
+  }
+})
+
+
+
+output$dist_uni_plot <- renderPlot({
+  req(input$variable_uni)
+  if (is.numeric(data()[[input$variable_uni]])) {
+    ggplot(data(), aes_string(x = input$variable_uni)) +
+      geom_histogram(fill = "blue", color = "white", bins = 30) +
+      labs(title = paste("Distribution de", input$variable_uni), x = input$variable_uni, y = "Fréquence") +
+      theme_minimal()
+  } else {
+    ggplot(data(), aes_string(x = input$variable_uni)) +
+      geom_bar(fill = "orange") +
+      labs(title = paste("Distribution de", input$variable_uni), x = input$variable_uni, y = "Fréquence") +
+      theme_minimal()
+  }
+})
+
+
+output$scatter_plot <- renderPlot({
+  req(input$variable_x, input$variable_y)
+  ggplot(data(), aes_string(x = input$variable_x, y = input$variable_y)) +
+    geom_point(color = "darkgreen") +
+    labs(title = paste("Nuage de points entre", input$variable_x, "et", input$variable_y),
+         x = input$variable_x, y = input$variable_y) +
+    theme_minimal()
+})
+
+
+output$box_plot <- renderPlot({
+  req(input$variable_x, input$variable_y)
+  
+  # Charger les données sans affecter les autres parties
+  df <- data()
+  
+  # Convertir temporairement la variable Y en facteur si elle est catégorique
+  if (input$variable_y %in% c("sex", "chest-pain", "fasting-blood-sugar", 
+                              "electrocardiographic", "angina", "slope", 
+                              "major-vessels", "thal", "heart-disease")) {
+    df[[input$variable_y]] <- as.factor(df[[input$variable_y]])
+  }
+  
+  # Vérifier si la variable Y est maintenant catégorique
+  if (is.factor(df[[input$variable_y]])) {
+    ggplot(df, aes_string(x = input$variable_y, y = input$variable_x)) +
+      geom_boxplot(fill = "purple", color = "black") +
+      labs(
+        title = paste("Boxplot de", input$variable_x, "par", input$variable_y),
+        x = input$variable_y,
+        y = input$variable_x
+      ) +
+      theme_minimal()
+  } else {
+    ggplot() +
+      annotate("text", x = 1, y = 1, label = "La variable Y doit être catégorique.", size = 5) +
+      theme_void()
+  }
+})
+
+
+
+
+output$correlation_metrics <- renderPrint({
+  req(input$variable_x, input$variable_y)
+  if (is.numeric(data()[[input$variable_x]]) && is.numeric(data()[[input$variable_y]])) {
+    correlation <- cor(data()[[input$variable_x]], data()[[input$variable_y]], use = "complete.obs")
+    paste("Coefficient de corrélation linéaire (Pearson):", round(correlation, 2))
+  } else {
+    "Les métriques de corrélation ne sont pas disponibles pour ces variables."
+  }
+})
+
+
+
+
 
 }
 
