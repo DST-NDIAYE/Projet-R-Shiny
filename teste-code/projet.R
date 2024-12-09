@@ -220,99 +220,107 @@ server <- function(input, output, session) {
 
 
  # Préparation des données
-  prepare_data <- reactive({
-    req(data())
-    target <- colnames(data())[14]  # Dernière colonne comme cible
-    predictors <- colnames(data())[-14]  # Toutes les autres colonnes
-    
-    list(
-      X = data()[, predictors],
-      y = as.factor(data()[[target]])
-    )
-  })
+prepare_data <- reactive({
+  req(data())
+  target <- colnames(data())[14]  
+  predictors <- colnames(data())[-14]  
   
-  # Division des données
-  split_data <- reactive({
-    req(prepare_data())
-    data_split <- prepare_data()
-    X <- data_split$X
-    y <- data_split$y
-    set.seed(123)
-    train_index <- caret::createDataPartition(y, p = 0.8, list = FALSE)
-    list(
-      X_train = X[train_index, ],
-      X_test = X[-train_index, ],
-      y_train = y[train_index],
-      y_test = y[-train_index]
-    )
-  })
+  dataset <- data()
+  dataset[[target]] <- as.factor(dataset[[target]])  
   
-  # Entraîner le modèle
-  model <- eventReactive(input$train_model, {
-    req(split_data())
-    data_split <- split_data()
-    X_train <- data_split$X_train
-    y_train <- data_split$y_train
-    
-    if (input$model_choice == "Régression Logistique") {
-      caret::train(X_train, y_train, method = "glm", family = "binomial")
-    } else if (input$model_choice == "Arbre de Décision") {
-      rpart(Target ~ ., data = data.frame(X_train, Target = y_train), method = "class")
-    } else if (input$model_choice == "Forêt Aléatoire") {
-      randomForest(X_train, y_train, ntree = 100)
-    } else if (input$model_choice == "SVM") {
-      e1071::svm(X_train, y_train, probability = TRUE)
-    }
-  })
+  list(
+    full_data = dataset,  
+    target = target       
+  )
+})
+
+
+split_data <- reactive({
+  req(prepare_data())
+  data_split <- prepare_data()
+  dataset <- data_split$full_data
+  target <- data_split$target
   
-  # Évaluer les performances
-  output$model_metrics <- renderPrint({
-    req(model())
-    data_split <- split_data()
-    X_test <- data_split$X_test
-    y_test <- data_split$y_test
-    
-    predictions <- predict(model(), newdata = X_test)
-    cm <- caret::confusionMatrix(as.factor(predictions), y_test)
-    
-    list(
-      Accuracy = cm$overall["Accuracy"],
-      Precision = cm$byClass["Precision"],
-      Recall = cm$byClass["Recall"],
-      F1_Score = cm$byClass["F1"]
-    )
-  })
+  set.seed(123)
+  train_index <- caret::createDataPartition(dataset[[target]], p = 0.8, list = FALSE)
   
-  # Tracer la courbe ROC
-  output$roc_curve <- renderPlotly({
-    
-    req(model())
-    data_split <- split_data()
-    X_test <- data_split$X_test
-    y_test <- data_split$y_test
-    
-    prob_predictions <- if (input$model_choice %in% c("Régression Logistique", "SVM")) {
-      predict(model(), newdata = X_test, type = "prob")[, 2]
-    } else {
-      as.numeric(predict(model(), newdata = X_test, type = "prob"))
-    }
-    
-    roc_obj <- pROC::roc(y_test, prob_predictions)
-    
-    plot_ly(
-      x = 1 - roc_obj$specificities,
-      y = roc_obj$sensitivities,
-      type = 'scatter',
-      mode = 'lines',
-      line = list(color = 'blue')
-    ) %>% layout(
-      title = "Courbe ROC",
-      xaxis = list(title = "1 - Specificité"),
-      yaxis = list(title = "Sensibilité")
-    )
-    
-  })
+  list(
+    train_data = dataset[train_index, ],
+    test_data = dataset[-train_index, ]
+  )
+})
+
+# Entraîner le modèle
+model <- eventReactive(input$train_model, {
+  req(split_data())
+  data_split <- split_data()
+  train_data <- data_split$train_data
+  target <- prepare_data()$target
   
+  if (input$model_choice == "Régression Logistique") {
+    caret::train(as.formula(paste(target, "~ .")), data = train_data, method = "glm", family = "binomial")
+  } else if (input$model_choice == "Arbre de Décision") {
+    rpart(as.formula(paste(target, "~ .")), data = train_data, method = "class")
+  } else if (input$model_choice == "Forêt Aléatoire") {
+    randomForest(as.formula(paste(target, "~ .")), data = train_data, ntree = 100)
+  } else if (input$model_choice == "SVM") {
+    e1071::svm(as.formula(paste(target, "~ .")), data = train_data, probability = TRUE)
+  }
+})
+
+# Évaluer les performances
+output$model_metrics <- renderPrint({
+  req(model())
+  data_split <- split_data()
+  test_data <- data_split$test_data
+  target <- prepare_data()$target
+  
+  predictions <- predict(model(), newdata = test_data, type = if (input$model_choice == "Régression Logistique") "raw" else "class")
+  cm <- caret::confusionMatrix(as.factor(predictions), test_data[[target]])
+  
+  list(
+    Accuracy = cm$overall["Accuracy"],
+    Precision = cm$byClass["Precision"],
+    Recall = cm$byClass["Recall"],
+    F1_Score = cm$byClass["F1"]
+  )
+})
+
+output$roc_curve <- renderPlotly({
+  req(model())
+  data_split <- split_data()
+  test_data <- data_split$test_data
+  target <- prepare_data()$target
+  
+  # Obtenir les probabilités pour les modèles qui les supportent
+  prob_predictions <- if (input$model_choice == "Régression Logistique" || input$model_choice == "SVM") {
+    predict(model(), newdata = test_data, type = "prob")[, 2]  # Probabilité de la classe positive
+  } else if (input$model_choice == "Arbre de Décision" || input$model_choice == "Forêt Aléatoire") {
+    as.numeric(predict(model(), newdata = test_data, type = "prob")[, 2])  # Probabilité de la classe positive
+  } else {
+    stop("Modèle non pris en charge pour la courbe ROC")
+  }
+  
+  # Vérifiez que les longueurs correspondent
+  if (length(prob_predictions) != length(test_data[[target]])) {
+    stop("La longueur des prédictions ne correspond pas à celle des valeurs réelles.")
+  }
+  
+  # Générer la courbe ROC
+  roc_obj <- pROC::roc(test_data[[target]], prob_predictions)
+  
+  plot_ly(
+    x = 1 - roc_obj$specificities,
+    y = roc_obj$sensitivities,
+    type = 'scatter',
+    mode = 'lines',
+    line = list(color = 'blue')
+  ) %>% layout(
+    title = "Courbe ROC",
+    xaxis = list(title = "1 - Specificité"),
+    yaxis = list(title = "Sensibilité")
+  )
+})
 
 
 
