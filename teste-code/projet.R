@@ -101,10 +101,6 @@ ui <- dashboardPage(
       tabItem(tabName = "preprocessing", h2("Prétraitement des données")),
       tabItem(tabName = "exploration", h2("Analyse exploratoire")),
 
-
-
-
-
       tabItem(
   tabName = "modeling",
   h2("Modélisation supervisée"),
@@ -140,10 +136,7 @@ fluidRow(
     width = 12,
     plotOutput("tree_plot") %>% withSpinner(color = "blue")  # Spinner pour le chargement
   )
-)
-
-  
-  ,
+),
   
   # Courbe ROC
   fluidRow(
@@ -154,24 +147,29 @@ fluidRow(
       width = 12,
       plotlyOutput("roc_curve")
     )
+  ),
+
+
+  fluidRow(
+  box(
+    title = "Importance des variables (Régression Logistique)",
+    status = "info",
+    solidHeader = TRUE,
+    width = 12,
+    plotOutput("variable_importance_plot")
   )
-  
- 
 )
-
-
-
-
-
-
-
-
-
-
-
+)
     )
   )
 )
+
+
+
+
+                        ##################### PARTIE SERVER #########################
+
+
 
 server <- function(input, output, session) {
   # Charger les données
@@ -424,8 +422,89 @@ output$tree_plot <- renderPlot({
 })
 
 
-
-
+output$variable_importance_plot <- renderPlot({
+  req(model())
+  
+  if (input$model_choice == "Régression Logistique") {
+    # Vérifier si le modèle est un objet caret::train ou glm
+    if (!is.null(model()$finalModel)) {
+      # Modèle caret::train
+      coefficients <- coef(model()$finalModel)
+    } else {
+      # Modèle glm standard
+      coefficients <- coef(model())
+    }
+    
+    # Vérifier que les coefficients sont numériques
+    if (!is.numeric(coefficients)) {
+      stop("Les coefficients extraits ne sont pas numériques. Vérifiez le modèle.")
+    }
+    
+    # Créer un data frame pour l'importance
+    variable_importance <- data.frame(
+      Variable = names(coefficients),
+      Importance = abs(as.numeric(coefficients))  # Valeur absolue des coefficients
+    )
+    
+    # Tracer le barplot
+    ggplot(variable_importance, aes(x = reorder(Variable, Importance), y = Importance)) +
+      geom_bar(stat = "identity", fill = "steelblue") +
+      coord_flip() +
+      labs(
+        title = "Importance des variables (Régression Logistique)",
+        x = "Variable",
+        y = "Importance (Valeur absolue du coefficient)"
+      ) +
+      theme_minimal()
+  } else if (input$model_choice == "Arbre de Décision") {
+    # Vérifier que le modèle est bien un objet rpart
+    if (!inherits(model(), "rpart")) {
+      stop("Le modèle sélectionné n'est pas un arbre de décision.")
+    }
+    
+    # Extraire l'importance des variables
+    importance_vals <- model()$variable.importance
+    
+    # Vérifier que l'importance des variables est disponible
+    if (is.null(importance_vals)) {
+      stop("Aucune importance de variable disponible pour cet arbre de décision.")
+    }
+    
+    # Créer un data frame pour l'affichage
+    variable_importance <- data.frame(
+      Variable = names(importance_vals),
+      Importance = importance_vals
+    )
+    
+    # Tracer le barplot
+    ggplot(variable_importance, aes(x = reorder(Variable, Importance), y = Importance)) +
+      geom_bar(stat = "identity", fill = "orange") +
+      coord_flip() +
+      labs(
+        title = "Importance des variables (Arbre de Décision)",
+        x = "Variable",
+        y = "Importance"
+      ) +
+      theme_minimal()
+  } else if (input$model_choice == "Forêt Aléatoire") {
+    # Gestion déjà correcte pour la Forêt Aléatoire
+    importance_vals <- randomForest::importance(model())
+    variable_importance <- data.frame(
+      Variable = rownames(importance_vals),
+      Importance = importance_vals[, 1]  # MDA ou MDG
+    )
+    
+    ggplot(variable_importance, aes(x = reorder(Variable, Importance), y = Importance)) +
+      geom_bar(stat = "identity", fill = "darkgreen") +
+      coord_flip() +
+      labs(
+        title = "Importance des variables (Forêt Aléatoire)",
+        x = "Variable",
+        y = "Importance"
+      ) +
+      theme_minimal()
+  } 
+})
 
 }
 
