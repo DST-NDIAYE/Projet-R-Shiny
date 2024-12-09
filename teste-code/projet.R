@@ -10,6 +10,7 @@ library(rpart)
 library(randomForest)
 library(e1071)
 library(pROC)
+library(rpart.plot)
 
 
 
@@ -122,15 +123,27 @@ ui <- dashboardPage(
   hr(),
   
   # Résultats des métriques
+  
   fluidRow(
-    box(
-      title = "Métriques du modèle",
-      status = "info",
-      solidHeader = TRUE,
-      width = 12,
-      verbatimTextOutput("model_metrics")
-    )
-  ),
+  infoBoxOutput("accuracy_info", width = 3),
+  infoBoxOutput("precision_info", width = 3),
+  infoBoxOutput("recall_info", width = 3),
+  infoBoxOutput("f1_score_info", width = 3)
+),
+
+
+fluidRow(
+  box(
+    title = "Visualisation du modèle",
+    status = "primary",
+    solidHeader = TRUE,
+    width = 12,
+    plotOutput("tree_plot") %>% withSpinner(color = "blue")  # Spinner pour le chargement
+  )
+)
+
+  
+  ,
   
   # Courbe ROC
   fluidRow(
@@ -269,7 +282,8 @@ model <- eventReactive(input$train_model, {
 })
 
 # Évaluer les performances
-output$model_metrics <- renderPrint({
+# Accuracy InfoBox
+output$accuracy_info <- renderInfoBox({
   req(model())
   data_split <- split_data()
   test_data <- data_split$test_data
@@ -278,13 +292,68 @@ output$model_metrics <- renderPrint({
   predictions <- predict(model(), newdata = test_data, type = if (input$model_choice == "Régression Logistique") "raw" else "class")
   cm <- caret::confusionMatrix(as.factor(predictions), test_data[[target]])
   
-  list(
-    Accuracy = cm$overall["Accuracy"],
-    Precision = cm$byClass["Precision"],
-    Recall = cm$byClass["Recall"],
-    F1_Score = cm$byClass["F1"]
+  infoBox(
+    title = "Accuracy",
+    value = round(cm$overall["Accuracy"] * 100, 2),  # Afficher en pourcentage
+    icon = icon("check-circle"),
+    color = "green"
   )
 })
+
+# Precision InfoBox
+output$precision_info <- renderInfoBox({
+  req(model())
+  data_split <- split_data()
+  test_data <- data_split$test_data
+  target <- prepare_data()$target
+  
+  predictions <- predict(model(), newdata = test_data, type = if (input$model_choice == "Régression Logistique") "raw" else "class")
+  cm <- caret::confusionMatrix(as.factor(predictions), test_data[[target]])
+  
+  infoBox(
+    title = "Precision",
+    value = round(cm$byClass["Precision"] * 100, 2),  # Afficher en pourcentage
+    icon = icon("balance-scale"),
+    color = "blue"
+  )
+})
+
+# Recall InfoBox
+output$recall_info <- renderInfoBox({
+  req(model())
+  data_split <- split_data()
+  test_data <- data_split$test_data
+  target <- prepare_data()$target
+  
+  predictions <- predict(model(), newdata = test_data, type = if (input$model_choice == "Régression Logistique") "raw" else "class")
+  cm <- caret::confusionMatrix(as.factor(predictions), test_data[[target]])
+  
+  infoBox(
+    title = "Recall",
+    value = round(cm$byClass["Recall"] * 100, 2),  # Afficher en pourcentage
+    icon = icon("sync-alt"),
+    color = "yellow"
+  )
+})
+
+# F1-Score InfoBox
+output$f1_score_info <- renderInfoBox({
+  req(model())
+  data_split <- split_data()
+  test_data <- data_split$test_data
+  target <- prepare_data()$target
+  
+  predictions <- predict(model(), newdata = test_data, type = if (input$model_choice == "Régression Logistique") "raw" else "class")
+  cm <- caret::confusionMatrix(as.factor(predictions), test_data[[target]])
+  
+  infoBox(
+    title = "F1-Score",
+    value = round(cm$byClass["F1"] * 100, 2),  # Afficher en pourcentage
+    icon = icon("chart-line"),
+    color = "red"
+  )
+})
+
 
 output$roc_curve <- renderPlotly({
   req(model())
@@ -306,21 +375,54 @@ output$roc_curve <- renderPlotly({
     stop("La longueur des prédictions ne correspond pas à celle des valeurs réelles.")
   }
   
-  # Générer la courbe ROC
+  # Générer la courbe ROC et calculer l'AUC
   roc_obj <- pROC::roc(test_data[[target]], prob_predictions)
+  auc_value <- round(pROC::auc(roc_obj), 3)  # Calcul de l'AUC
   
-  plot_ly(
-    x = 1 - roc_obj$specificities,
-    y = roc_obj$sensitivities,
-    type = 'scatter',
-    mode = 'lines',
-    line = list(color = 'blue')
-  ) %>% layout(
-    title = "Courbe ROC",
-    xaxis = list(title = "1 - Specificité"),
-    yaxis = list(title = "Sensibilité")
+  # Transformer les données ROC en data.frame pour ggplot2
+  roc_data <- data.frame(
+    Specificity = 1 - roc_obj$specificities,
+    Sensitivity = roc_obj$sensitivities
   )
+  
+  # Tracer la courbe ROC avec ggplot2
+  ggplot(roc_data, aes(x = Specificity, y = Sensitivity)) +
+    geom_line(color = "blue", size = 1) +
+    geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +  # Ligne de base (random)
+    labs(
+      title = paste("Courbe ROC (AUC =", auc_value, ")"),
+      x = "1 - Specificité",
+      y = "Sensibilité"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      axis.title = element_text(size = 12)
+    )
 })
+
+
+output$tree_plot <- renderPlot({
+  req(model())
+  
+  # Vérifier quel modèle est utilisé
+  if (input$model_choice == "Arbre de Décision") {
+    # Visualiser l'arbre de décision
+    
+    rpart.plot::rpart.plot(model(), main = "Arbre de Décision")
+    
+  } else if (input$model_choice == "Forêt Aléatoire") {
+    # Visualiser un arbre individuel dans la forêt
+    
+    selected_tree <- randomForest::getTree(model(), k = 1, labelVar = TRUE)  # Sélectionner le premier arbre
+    plot(selected_tree, main = "Arbre individuel dans la Forêt Aléatoire")
+  } else {
+    # Si ce n'est pas un modèle compatible
+    plot(0, 0, type = "n", ann = FALSE)
+    text(0, 0, "Visualisation non disponible pour ce modèle", cex = 1.5)
+  }
+})
+
 
 
 
