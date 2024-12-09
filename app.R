@@ -1,5 +1,7 @@
 library(shiny)
 library(shinydashboard)
+library(DT)
+library(ggplot2)
 
 ui <- dashboardPage(
   # Barre d'en-tête avec un menu déroulant
@@ -35,8 +37,10 @@ ui <- dashboardPage(
   
   # Barre latérale pour naviguer entre les sections
   dashboardSidebar(
+
     sidebarMenu(
-      menuItem("Accueil", tabName = "home", icon = icon("home")),
+      
+      menuItem("Dashboard", tabName = "home", icon = icon("home")),
       menuItem("Prétraitement", tabName = "preprocessing", icon = icon("sliders"),
         menuSubItem("Choix des colonnes", tabName = "columns"),
         menuSubItem("Normalisation", tabName = "normalization"),
@@ -50,17 +54,45 @@ ui <- dashboardPage(
   # Corps principal où le contenu s'affichera
   dashboardBody(
     tabItems(
-      # Page d'accueil
+      # Page d'Dashboard
       tabItem(
-        tabName = "home",
-        h2("Bienvenue sur l'application Shiny !"),
-        p("Utilisez le menu pour naviguer entre les différentes sections.")
-      ),
+  tabName = "home",
+  
+  fluidRow(
+    column(4, 
+           # Bouton de recherche du fichier à charger
+           fileInput(inputId = "file1", label = "Choose CSV File",
+                     accept = c("text/plain", ".csv"))
+    ),
+    column(4, 
+           actionButton(inputId = "go", label = "Charger les données")
+    )
+  ),
+  
+  hr(),
+  
+  # Row for InfoBoxes
+  fluidRow(
+    infoBoxOutput("rows_columns_info"),
+    infoBoxOutput("missing_values_info")
+  ),
+  
+  fluidRow(
+    infoBoxOutput("numeric_categorical_info")
+  ),
+  
+  hr(),
+  
+  DT::dataTableOutput("demo_datatable",
+                      width = "50%",
+                      height = "auto")
+)
+,
       
       # Section Prétraitement
       tabItem(
         tabName = "columns",
-        h2("Choix des colonnes à utiliser")
+        h2("Choix des colonnes à utiliser") ,
       ),
       tabItem(
         tabName = "normalization",
@@ -86,6 +118,59 @@ ui <- dashboardPage(
   )
 )
 
-server <- function(input, output) {}
+server <- function(input, output) {
+  
+  # Charger les données de manière réactive
+  data <- eventReactive(input$go, {
+    inFile <- input$file1
+    if (is.null(inFile)) return(NULL)
+    read.csv(inFile$datapath, header = FALSE)
+  })
+  
+  # InfoBox : Nombre de lignes et colonnes
+  output$rows_columns_info <- renderInfoBox({
+    req(data())  # Vérifie que les données sont chargées
+    
+    infoBox(
+      title = "Lignes et Colonnes",
+      value = paste0(nrow(data()), " lignes, ", ncol(data()), " colonnes"),
+      icon = icon("table"),
+      color = "blue"
+    )
+  })
+  
+  # InfoBox : Nombre de valeurs manquantes
+  output$missing_values_info <- renderInfoBox({
+    req(data())
+    
+    infoBox(
+      title = "Valeurs Manquantes",
+      value = sum(is.na(data())),
+      icon = icon("exclamation-circle"),
+      color = "red"
+    )
+  })
+  
+  # InfoBox : Variables numériques et catégorielles
+  output$numeric_categorical_info <- renderInfoBox({
+    req(data())
+    
+    num_numeric <- sum(sapply(data(), is.numeric))
+    num_categorical <- sum(sapply(data(), is.factor) | sapply(data(), is.character))
+    
+    infoBox(
+      title = "Types de Variables",
+      value = paste0(num_numeric, " numériques, ", num_categorical, " catégorielles"),
+      icon = icon("list"),
+      color = "green"
+    )
+  })
+  
+  # Affichage des données dans un tableau
+  output$demo_datatable <- DT::renderDataTable({
+    data()
+  }, options = list(pageLength = 10))
+}
+
 
 shinyApp(ui, server)
